@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "globby": "^14.0.2",
+    "lodash.orderby": "^4.6.0"
+  }
+}
