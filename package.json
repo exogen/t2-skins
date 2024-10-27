@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "gallery": "node gallery.mjs"
   },
   "dependencies": {
     "globby": "^14.0.2",
