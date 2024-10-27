@@ -33,7 +33,7 @@ await page.goto("https://exogen.github.io/t2-model-skinner/", {
 
 await page.waitForNetworkIdle({ idleTime: 2000 });
 
-await page.setViewport({ width: 800, height: 1600 });
+await page.setViewport({ width: 680, height: 800 });
 
 const modelSelector = await page.waitForSelector("#ModelSelect");
 const fileInput = await page.waitForSelector(
