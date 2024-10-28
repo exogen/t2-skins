@@ -62,7 +62,7 @@ for (let i = 0; i < customSkins.length; i++) {
         console.log(skinPath);
         await fileInput.uploadFile(skinPath);
         await sleep(250);
-        await await modelViewer.screenshot({
+        await modelViewer.screenshot({
           path: outputPath,
           type: outputType,
           quality: 75,
