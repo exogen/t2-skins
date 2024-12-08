@@ -18,10 +18,31 @@ const models = [
   "hbioderm",
 ];
 
+const weaponModels = [
+  "chaingun",
+  "disc",
+  "elf",
+  "energy",
+  "grenade_launcher",
+  "missile",
+  "mortar",
+  "plasmathrower",
+  "repair",
+  "shocklance",
+  "sniper",
+  "targeting",
+];
+
 const T2_SKINS_PATH = ".";
 
 const customSkins = await Promise.all(
   models.map((name) => globby(`${T2_SKINS_PATH}/docs/skins/*.${name}.png`))
+);
+
+const customWeaponSkins = await Promise.all(
+  weaponModels.map((name) =>
+    globby(`${T2_SKINS_PATH}/docs/skins/*/weapon_${name}.png`)
+  )
 );
 
 const browser = await puppeteer.launch();
@@ -42,9 +63,12 @@ const fileInput = await page.waitForSelector(
 
 const outputType = "webp";
 
-for (let i = 0; i < customSkins.length; i++) {
-  const modelName = models[i];
-  const modelSkins = customSkins[i];
+const allModels = [...models, ...weaponModels];
+const allCustomSkins = [...customSkins, ...customWeaponSkins];
+
+for (let i = 0; i < allCustomSkins.length; i++) {
+  const modelName = allModels[i];
+  const modelSkins = allCustomSkins[i];
   if (modelSkins.length) {
     await modelSelector.select(modelName);
     await sleep(1000);
@@ -53,9 +77,15 @@ for (let i = 0; i < customSkins.length; i++) {
       node.setAttribute("interaction-prompt", "none");
     });
     for (const skinPath of modelSkins) {
-      const outputPath = skinPath
-        .replace(/\/skins\//, "/gallery/")
-        .replace(/\.png$/, `.${outputType}`);
+      const outputPath = models.includes(modelName)
+        ? skinPath
+            .replace(/\/skins\//, "/gallery/")
+            .replace(/\.png$/, `.${outputType}`)
+        : skinPath
+            .replace(/\/skins\//, "/gallery/")
+            .replace(/\/weapon_/, ".")
+            .replace(/\.png$/, `.${outputType}`);
+
       if (fs.existsSync(outputPath)) {
         console.log(`${skinPath} (skipped)`);
       } else {
