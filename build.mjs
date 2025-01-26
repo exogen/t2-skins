@@ -35,6 +35,16 @@ const weaponModels = [
   "targeting",
 ];
 
+const vehicleModels = [
+  "vehicle_grav_scout",
+  "vehicle_grav_tank",
+  "turret_assaulttank_mortar",
+  "vehicle_land_mpbbase",
+  "vehicle_air_scout",
+  "vehicle_air_bomber",
+  "vehicle_air_hapc",
+];
+
 const T2_SKINS_PATH = ".";
 
 async function getSkinManifest() {
