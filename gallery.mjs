@@ -1,49 +1,11 @@
 import fs from "fs";
 import { globby } from "globby";
 import puppeteer from "puppeteer";
+import { fileArrayToModels } from "./modelData.mjs";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-
-const models = [
-  "lmale",
-  "mmale",
-  "hmale",
-  "lfemale",
-  "mfemale",
-  "hfemale",
-  "lbioderm",
-  "mbioderm",
-  "hbioderm",
-];
-
-const weaponModels = [
-  "chaingun",
-  "disc",
-  "elf",
-  "energy",
-  "grenade_launcher",
-  "missile",
-  "mortar",
-  "plasmathrower",
-  "repair",
-  "shocklance",
-  "sniper",
-  "targeting",
-];
-
-const T2_SKINS_PATH = ".";
-
-const customSkins = await Promise.all(
-  models.map((name) => globby(`${T2_SKINS_PATH}/docs/skins/*.${name}.png`))
-);
-
-const customWeaponSkins = await Promise.all(
-  weaponModels.map((name) =>
-    globby(`${T2_SKINS_PATH}/docs/skins/*/weapon_${name}.png`)
-  )
-);
 
 const browser = await puppeteer.launch();
 const page = await browser.newPage();
@@ -63,34 +25,39 @@ const fileInput = await page.waitForSelector(
 
 const outputType = "webp";
 
-const allModels = [...models, ...weaponModels];
-const allCustomSkins = [...customSkins, ...customWeaponSkins];
+async function findModelSkins() {
+  const skinPaths = await globby(`./docs/skins/**/*.png`);
 
-for (let i = 0; i < allCustomSkins.length; i++) {
-  const modelName = allModels[i];
-  const modelSkins = allCustomSkins[i];
-  if (modelSkins.length) {
-    await modelSelector.select(modelName);
-    await sleep(1000);
-    const modelViewer = await page.waitForSelector("model-viewer");
-    await modelViewer.evaluate((node) => {
-      node.setAttribute("interaction-prompt", "none");
-    });
-    for (const skinPath of modelSkins) {
-      const outputPath = models.includes(modelName)
-        ? skinPath
-            .replace(/\/skins\//, "/gallery/")
-            .replace(/\.png$/, `.${outputType}`)
-        : skinPath
-            .replace(/\/skins\//, "/gallery/")
-            .replace(/\/weapon_/, ".")
-            .replace(/\.png$/, `.${outputType}`);
+  const foundModels = fileArrayToModels(skinPaths, (path) => {
+    const parts = path.split("/");
+    if (parts.length === 4) {
+      return null;
+    } else {
+      return parts[3];
+    }
+  });
 
+  return foundModels;
+}
+
+const foundModelSkins = await findModelSkins();
+
+for (const [modelName, skinsByName] of foundModelSkins.entries()) {
+  for (const [skinName, skin] of skinsByName.entries()) {
+    if (skinName && skin.isComplete) {
+      const outputPath = `./docs/gallery/${skinName}.${modelName}.${outputType}`;
       if (fs.existsSync(outputPath)) {
-        console.log(`${skinPath} (skipped)`);
+        console.log(`${outputPath} (skipped)`);
       } else {
-        console.log(skinPath);
-        await fileInput.uploadFile(skinPath);
+        console.log(outputPath);
+        const paths = Array.from(skin.files.values()).flat();
+        await modelSelector.select(modelName);
+        await sleep(1000);
+        const modelViewer = await page.waitForSelector("model-viewer");
+        await modelViewer.evaluate((node) => {
+          node.setAttribute("interaction-prompt", "none");
+        });
+        await fileInput.uploadFile(...paths);
         await sleep(250);
         await modelViewer.screenshot({
           path: outputPath,
