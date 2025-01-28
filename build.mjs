@@ -319,7 +319,10 @@ function fileArrayToModels(paths, getSkinName = () => null) {
         ) {
           skinMaterials.dateModified = dateModified;
         }
-        skinMaterials.files.set(model.material.name, path);
+        skinMaterials.files.set(
+          model.material.file ?? model.material.name,
+          path
+        );
         skinsByName.set(fileInfo.skinName, skinMaterials);
         foundModels.set(model.modelName, skinsByName);
       });
@@ -334,7 +337,7 @@ function fileArrayToModels(paths, getSkinName = () => null) {
     );
     skinsByName.forEach((skin) => {
       skin.isComplete = requiredMaterials.every((material) =>
-        skin.files.has(material.name)
+        skin.files.has(material.file ?? material.name)
       );
     });
   });
