@@ -49,7 +49,10 @@ export const modelMaterials = {
   mbioderm: [{ name: "base", fileSuffix: ".mbioderm" }],
   hbioderm: [{ name: "base", fileSuffix: ".hbioderm" }],
   // Weapons
-  disc: [{ name: "weapon_disc" }, { name: "dcase00", optional: true }],
+  disc: [
+    { name: "weapon_disc" },
+    { name: "dcase00", frameCount: 6, optional: true },
+  ],
   chaingun: [{ name: "weapon_chaingun" }],
   grenade_launcher: [{ name: "weapon_grenade_launcher" }],
   sniper: [
@@ -255,6 +258,26 @@ function createReverseFileMap(materialMap) {
 
 const fileToModelMap = createReverseFileMap(modelMaterials);
 
+function getFrameInfo(nameWithoutExtension) {
+  const match = /^(.+[^\d])(\d{2,})$/.exec(nameWithoutExtension);
+  if (match) {
+    const head = match[1];
+    const tail = match[2];
+    const frameIndex = parseInt(tail, 10);
+    const frameZeroFile = `${head}${"0".padStart(tail.length, "0")}`;
+    const models = fileToModelMap.get(frameZeroFile) ?? [];
+    return models
+      .filter((model) => typeof model.material.frameCount === "number")
+      .map((model) => {
+        return {
+          ...model,
+          frameIndex,
+        };
+      });
+  }
+  return [];
+}
+
 export function fileToModels(path, skinName = null) {
   const basename = path.split("/").slice(-1)[0];
   const match = basename.match(/^(.+)\.(PNG|png)$/);
@@ -275,17 +298,28 @@ export function fileToModels(path, skinName = null) {
         };
       }
     } else {
-      const key = parts[0];
-      const models = fileToModelMap.get(key);
-      if (models) {
+      const frameInfo = getFrameInfo(parts[0]);
+      if (frameInfo.length) {
         return {
           path,
           basename,
           nameWithoutExtension,
           extension: match[2],
           skinName,
-          models,
+          models: frameInfo,
         };
+      } else {
+        const models = fileToModelMap.get(parts[0]);
+        if (models) {
+          return {
+            path,
+            basename,
+            nameWithoutExtension,
+            extension: match[2],
+            skinName,
+            models,
+          };
+        }
       }
     }
   }
@@ -318,9 +352,10 @@ export function fileArrayToModels(
             skinMaterials.dateModified = dateModified;
           }
         }
-        skinMaterials.files.set(model.material.file ?? model.material.name, [
-          path,
-        ]);
+        const key = model.material.file ?? model.material.name;
+        const materialFrames = skinMaterials.files.get(key) ?? [];
+        materialFrames[model.frameIndex ?? 0] = path;
+        skinMaterials.files.set(key, materialFrames);
         skinsByName.set(fileInfo.skinName, skinMaterials);
         foundModels.set(model.modelName, skinsByName);
       });
