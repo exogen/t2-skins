@@ -1,7 +1,8 @@
 {
   "scripts": {
     "build": "node build.mjs",
-    "gallery": "node gallery.mjs"
+    "gallery": "node gallery.mjs",
+    "optimize": "oxipng --opt=max --strip=safe --preserve -r docs/skins"
   },
   "dependencies": {
     "globby": "^14.0.2",
