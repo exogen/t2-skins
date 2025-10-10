@@ -58,7 +58,7 @@ for (const [modelName, skinsByName] of foundModelSkins.entries()) {
           node.setAttribute("interaction-prompt", "none");
         });
         await fileInput.uploadFile(...paths);
-        await sleep(250);
+        await sleep(1000);
         await modelViewer.screenshot({
           path: outputPath,
           type: outputType,
