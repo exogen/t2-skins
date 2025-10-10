@@ -10,6 +10,16 @@ function sleep(ms) {
 const browser = await puppeteer.launch();
 const page = await browser.newPage();
 
+// await page.exposeFunction("onMaterialReady", (event) => {
+//   console.log("material-ready:", event);
+// });
+
+// await page.evaluateOnNewDocument(() => {
+//   window.addEventListener("material-ready", (e) => {
+//     window.onMaterialReady(e);
+//   });
+// });
+
 await page.goto("https://exogen.github.io/t2-model-skinner/", {
   waitUntil: "load",
 });
@@ -52,13 +62,18 @@ for (const [modelName, skinsByName] of foundModelSkins.entries()) {
         console.log(outputPath);
         const paths = Array.from(skin.files.values()).flat();
         await modelSelector.select(modelName);
-        await sleep(1000);
+        await page.waitForNetworkIdle({ idleTime: 2000 });
+        await sleep(500);
         const modelViewer = await page.waitForSelector("model-viewer");
         await modelViewer.evaluate((node) => {
           node.setAttribute("interaction-prompt", "none");
         });
         await fileInput.uploadFile(...paths);
+        await page.waitForNetworkIdle({ idleTime: 2000 });
         await sleep(1000);
+        await modelViewer.evaluate(async (node) => {
+          await node.updateComplete;
+        });
         await modelViewer.screenshot({
           path: outputPath,
           type: outputType,
