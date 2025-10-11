@@ -351,8 +351,7 @@ export function fileArrayToModels(
           files: new Map(),
         };
         if (readModificationDate) {
-          const dateFirstSeen =
-            firstSeenDates[fullPath] ?? fs.statSync(fullPath).birthtime;
+          const dateFirstSeen = firstSeenDates[fullPath];
           if (
             !skinMaterials.dateFirstSeen ||
             skinMaterials.dateFirstSeen < dateFirstSeen
@@ -388,8 +387,16 @@ export function fileArrayToModels(
 function getFileFirstAddedDate(dirPath) {
   const output = execFileSync(
     "git",
-    ["log", "--diff-filter=A", "--name-only", "--format=%aI", "--", dirPath],
-    { encoding: "utf8" }
+    [
+      "log",
+      "--follow",
+      "--diff-filter=AR",
+      "--name-only",
+      "--format=%aI",
+      "--",
+      dirPath,
+    ],
+    { encoding: "utf8", maxBuffer: 1024 * 1024 * 256 }
   );
 
   const entries = {};
@@ -397,9 +404,9 @@ function getFileFirstAddedDate(dirPath) {
   for (const line of output.split("\n")) {
     if (!line.trim()) continue;
     if (/^\d{4}-\d{2}-\d{2}T/.test(line)) {
-      date = line.trim();
+      date = new Date(line.trim());
     } else if (date) {
-      entries[path.resolve(line.trim())] ??= new Date(date);
+      entries[path.resolve(line.trim())] = date;
     }
   }
 
