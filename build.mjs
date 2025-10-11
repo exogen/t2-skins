@@ -44,7 +44,8 @@ async function getSkinManifest() {
       skins[name] = orderBy(
         [...modelSkins.keys()].filter(
           (skinName) =>
-            modelSkins.get(skinName).dateModified.getTime() > nineMonthsAgo
+            !modelSkins.get(skinName).dateFirstSeen ||
+            modelSkins.get(skinName).dateFirstSeen.getTime() > nineMonthsAgo
         ),
         [(name) => name.toLowerCase()],
         ["asc"]

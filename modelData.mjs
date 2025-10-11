@@ -1,4 +1,6 @@
 import fs from "fs";
+import path from "path";
+import { execFileSync } from "child_process";
 
 export const playerModels = [
   "lmale",
@@ -332,29 +334,35 @@ export function fileArrayToModels(
   { readModificationDate = false } = {}
 ) {
   const foundModels = new Map();
-  paths.forEach((path) => {
-    const fileInfo = fileToModels(path, getSkinName(path));
+  const firstSeenDates = readModificationDate
+    ? getFileFirstAddedDate("./docs/skins")
+    : {};
+
+  paths.forEach((filePath) => {
+    const fullPath = path.resolve(filePath);
+    const fileInfo = fileToModels(filePath, getSkinName(filePath));
     if (fileInfo) {
       fileInfo.models.forEach((model) => {
         const skinsByName = foundModels.get(model.modelName) ?? new Map();
         const skinMaterials = skinsByName.get(fileInfo.skinName) ?? {
           name: fileInfo.skinName,
           isComplete: null,
-          dateModified: null,
+          dateFirstSeen: null,
           files: new Map(),
         };
         if (readModificationDate) {
-          const dateModified = fs.statSync(path).mtime;
+          const dateFirstSeen =
+            firstSeenDates[fullPath] ?? fs.statSync(fullPath).birthtime;
           if (
-            !skinMaterials.dateModified ||
-            skinMaterials.dateModified < dateModified
+            !skinMaterials.dateFirstSeen ||
+            skinMaterials.dateFirstSeen < dateFirstSeen
           ) {
-            skinMaterials.dateModified = dateModified;
+            skinMaterials.dateFirstSeen = dateFirstSeen;
           }
         }
         const key = model.material.file ?? model.material.name;
         const materialFrames = skinMaterials.files.get(key) ?? [];
-        materialFrames[model.frameIndex ?? 0] = path;
+        materialFrames[model.frameIndex ?? 0] = filePath;
         skinMaterials.files.set(key, materialFrames);
         skinsByName.set(fileInfo.skinName, skinMaterials);
         foundModels.set(model.modelName, skinsByName);
@@ -375,4 +383,25 @@ export function fileArrayToModels(
     });
   });
   return foundModels;
+}
+
+function getFileFirstAddedDate(dirPath) {
+  const output = execFileSync(
+    "git",
+    ["log", "--diff-filter=A", "--name-only", "--format=%aI", "--", dirPath],
+    { encoding: "utf8" }
+  );
+
+  const entries = {};
+  let date = null;
+  for (const line of output.split("\n")) {
+    if (!line.trim()) continue;
+    if (/^\d{4}-\d{2}-\d{2}T/.test(line)) {
+      date = line.trim();
+    } else if (date) {
+      entries[path.resolve(line.trim())] ??= new Date(date);
+    }
+  }
+
+  return entries;
 }
