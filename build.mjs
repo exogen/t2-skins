@@ -60,14 +60,14 @@ async function getSkinManifest({
   const newPacks = {};
   for (const oldPackName in oldPacks) {
     const oldPack = oldPacks[oldPackName];
-    const newPack = {};
-    for (const modelName in oldPack) {
+    const newPack = { skins: {} };
+    for (const modelName in oldPack.skins) {
       const modelSkins = foundModels.get(modelName) ?? new Map();
-      const skinsThatStillExist = oldPack[modelName].filter(
+      const skinsThatStillExist = oldPack.skins[modelName].filter(
         (skinName) => modelSkins.get(skinName)?.isComplete
       );
       if (skinsThatStillExist.length) {
-        newPack[modelName] = skinsThatStillExist;
+        newPack.skins[modelName] = skinsThatStillExist;
         newPacks[oldPackName] = newPack;
       }
     }
@@ -77,7 +77,7 @@ async function getSkinManifest({
     if (deletePack) {
       delete newPacks[packName];
     } else {
-      const newPack = newPacks[packName] ?? {};
+      const newPack = newPacks[packName] ?? { skins: {} };
       for (const modelName of foundModels.keys()) {
         const modelSkins = foundModels.get(modelName) ?? new Map();
         for (const skinName of modelSkins.keys()) {
@@ -91,9 +91,9 @@ async function getSkinManifest({
               .map((filePath) => path.resolve(filePath))
           );
           if (inputFiles.some((inputFile) => allFiles.has(inputFile))) {
-            const previousSkins = newPack[modelName] ?? [];
+            const previousSkins = newPack.skins[modelName] ?? [];
             if (!previousSkins.includes(skinName)) {
-              newPack[modelName] = orderBy(
+              newPack.skins[modelName] = orderBy(
                 [...previousSkins, skinName],
                 (name) => name.toLowerCase(),
                 ["asc"]
@@ -103,7 +103,39 @@ async function getSkinManifest({
           }
         }
       }
-      console.log("New pack!", newPack);
+    }
+  }
+
+  for (const packName in newPacks) {
+    const newPack = newPacks[packName];
+    const oldPack = oldPacks[packName];
+
+    newPack.files = Object.entries(newPack.skins)
+      .map(([modelName, modelSkins]) => {
+        return modelSkins.map((skinName) =>
+          Array.from(foundModels.get(modelName).get(skinName).files.values())
+            .flat()
+            .map((filePath) => path.relative("./docs/skins", filePath))
+        );
+      })
+      .flat(Infinity)
+      .sort();
+
+    if (oldPack?.version) {
+      newPack.version = oldPack.version;
+      if (JSON.stringify(oldPack) !== JSON.stringify(newPack)) {
+        newPack.version = `${parseInt(oldPack.version, 10) + 1}`;
+        console.log(
+          `[${packName}] Existing pack has changed content, bumping version number.`
+        );
+      } else {
+        console.log(
+          `[${packName}] Existing pack has not changed, keeping version number.`
+        );
+      }
+    } else {
+      newPack.version = "1";
+      console.log(`[${packName}] First version of pack, starting at 1.`);
     }
   }
 
