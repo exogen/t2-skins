@@ -36,6 +36,7 @@ async function getSkinManifest({
       customSkins: {},
       newSkins: {},
       packs: {},
+      sizeMultiplier: {},
     };
   }
 
@@ -139,6 +140,18 @@ async function getSkinManifest({
     }
   }
 
+  const sizeMultiplier = {};
+
+  foundModels.forEach((modelSkins, modelName) => {
+    modelSkins.forEach((skin, skinName) => {
+      if (skin.sizeMultiplier.size) {
+        skin.sizeMultiplier.forEach((multiplier, relativePath) => {
+          sizeMultiplier[relativePath] = multiplier;
+        });
+      }
+    });
+  });
+
   return {
     customSkins: allModels.reduce((skins, name, i) => {
       const modelSkins = foundModels.get(name) ?? new Map();
@@ -165,6 +178,7 @@ async function getSkinManifest({
       return skins;
     }, {}),
     packs: newPacks,
+    sizeMultiplier,
   };
 }
 
