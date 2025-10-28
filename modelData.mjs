@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { execFileSync } from "child_process";
 import probe from "probe-image-size";
+import { resizePng } from "./resize.mjs";
 
 const defaultTextureSize = [512, 512];
 
@@ -569,7 +570,9 @@ export function fileArrayToModels(
           sizeMultiplier: new Map(),
         };
 
-        const sizeInfo = probe.sync(fs.readFileSync(fullPath));
+        const inBuffer = fs.readFileSync(fullPath);
+
+        const sizeInfo = probe.sync(inBuffer);
         const key = model.material.file ?? model.material.name;
         const baseSize = model.material.size ?? defaultTextureSize;
         const sizeMultiplier = Math.max(
@@ -581,6 +584,18 @@ export function fileArrayToModels(
             path.relative("docs/skins", fullPath),
             sizeMultiplier
           );
+          const outPath = fullPath.replace(/\.png$/, "@1x.png");
+          console.log(
+            `Resizing: ${path.relative(
+              "docs/skins",
+              fullPath
+            )} -> ${path.relative("docs/skins", outPath)}`
+          );
+          const outBuffer = resizePng(inBuffer, {
+            width: baseSize[0],
+            height: baseSize[1],
+          });
+          fs.writeFileSync(outPath, outBuffer);
         }
 
         if (readModificationDate) {

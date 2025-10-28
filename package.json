@@ -7,6 +7,7 @@
   "dependencies": {
     "globby": "^14.0.2",
     "lodash.orderby": "^4.6.0",
+    "pngjs": "^7.0.0",
     "probe-image-size": "^7.2.3",
     "puppeteer": "^23.6.0"
   }
