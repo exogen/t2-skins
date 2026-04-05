@@ -14,12 +14,15 @@ const { values, positionals } = parseArgs({
     delete: {
       type: "boolean",
     },
+    debug: {
+      type: "boolean",
+    },
   },
 });
 
 const ONE_DAY = 1000 * 60 * 60 * 24;
 const THIRTY_DAYS = ONE_DAY * 30;
-const NEW_CUTOFF = THIRTY_DAYS * 4;
+const NEW_CUTOFF = THIRTY_DAYS * 3;
 
 const newCutoffDate = Date.now() - NEW_CUTOFF;
 
@@ -56,6 +59,35 @@ async function getSkinManifest({
       readModificationDate: true,
     },
   );
+
+  if (values.debug) {
+    const allSkins = [];
+    foundModels.forEach((skinsByName, modelName) => {
+      skinsByName.forEach((skin, skinName) => {
+        allSkins.push({
+          model: modelName,
+          skin: skinName,
+          dateFirstSeen: skin.dateFirstSeen,
+          isComplete: skin.isComplete,
+        });
+      });
+    });
+    allSkins.sort(
+      (a, b) =>
+        (a.dateFirstSeen?.getTime() ?? 0) - (b.dateFirstSeen?.getTime() ?? 0),
+    );
+    for (const s of allSkins) {
+      const date = s.dateFirstSeen
+        ? s.dateFirstSeen.toISOString().slice(0, 10)
+        : "NO DATE";
+      const isNew =
+        !s.dateFirstSeen || s.dateFirstSeen.getTime() > newCutoffDate;
+      console.log(
+        `${date}  ${isNew ? "NEW" : "   "}  ${s.model}/${s.skin}${s.isComplete ? "" : " (incomplete)"}`,
+      );
+    }
+    process.exit(0);
+  }
 
   const oldPacks = previousManifest.packs ?? {};
   const newPacks = {};
