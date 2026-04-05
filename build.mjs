@@ -19,7 +19,7 @@ const { values, positionals } = parseArgs({
 
 const ONE_DAY = 1000 * 60 * 60 * 24;
 const THIRTY_DAYS = ONE_DAY * 30;
-const NEW_CUTOFF = THIRTY_DAYS * 6;
+const NEW_CUTOFF = THIRTY_DAYS * 4;
 
 const newCutoffDate = Date.now() - NEW_CUTOFF;
 
