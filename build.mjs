@@ -19,9 +19,9 @@ const { values, positionals } = parseArgs({
 
 const ONE_DAY = 1000 * 60 * 60 * 24;
 const THIRTY_DAYS = ONE_DAY * 30;
-const NINE_MONTHS = THIRTY_DAYS * 9;
+const NEW_CUTOFF = THIRTY_DAYS * 6;
 
-const nineMonthsAgo = Date.now() - NINE_MONTHS;
+const newCutoffDate = Date.now() - NEW_CUTOFF;
 
 async function getSkinManifest({
   packName = null,
@@ -54,7 +54,7 @@ async function getSkinManifest({
     },
     {
       readModificationDate: true,
-    }
+    },
   );
 
   const oldPacks = previousManifest.packs ?? {};
@@ -65,7 +65,7 @@ async function getSkinManifest({
     for (const modelName in oldPack.skins) {
       const modelSkins = foundModels.get(modelName) ?? new Map();
       const skinsThatStillExist = oldPack.skins[modelName].filter(
-        (skinName) => modelSkins.get(skinName)?.isComplete
+        (skinName) => modelSkins.get(skinName)?.isComplete,
       );
       if (skinsThatStillExist.length) {
         newPack.skins[modelName] = skinsThatStillExist;
@@ -89,7 +89,7 @@ async function getSkinManifest({
           const allFiles = new Set(
             Array.from(skin.files.values())
               .flat()
-              .map((filePath) => path.resolve(filePath))
+              .map((filePath) => path.resolve(filePath)),
           );
           if (inputFiles.some((inputFile) => allFiles.has(inputFile))) {
             const previousSkins = newPack.skins[modelName] ?? [];
@@ -97,7 +97,7 @@ async function getSkinManifest({
               newPack.skins[modelName] = orderBy(
                 [...previousSkins, skinName],
                 (name) => name.toLowerCase(),
-                ["asc"]
+                ["asc"],
               );
               newPacks[packName] = newPack;
             }
@@ -116,7 +116,7 @@ async function getSkinManifest({
         return modelSkins.map((skinName) =>
           Array.from(foundModels.get(modelName).get(skinName).files.values())
             .flat()
-            .map((filePath) => path.relative("./docs/skins", filePath))
+            .map((filePath) => path.relative("./docs/skins", filePath)),
         );
       })
       .flat(Infinity)
@@ -127,11 +127,11 @@ async function getSkinManifest({
       if (JSON.stringify(oldPack) !== JSON.stringify(newPack)) {
         newPack.version = `${parseInt(oldPack.version, 10) + 1}`;
         console.log(
-          `[${packName}] Existing pack has changed content, bumping version number.`
+          `[${packName}] Existing pack has changed content, bumping version number.`,
         );
       } else {
         console.log(
-          `[${packName}] Existing pack has not changed, keeping version number.`
+          `[${packName}] Existing pack has not changed, keeping version number.`,
         );
       }
     } else {
@@ -157,10 +157,10 @@ async function getSkinManifest({
       const modelSkins = foundModels.get(name) ?? new Map();
       skins[name] = orderBy(
         [...modelSkins.keys()].filter(
-          (skinName) => modelSkins.get(skinName).isComplete
+          (skinName) => modelSkins.get(skinName).isComplete,
         ),
         [(name) => name.toLowerCase()],
-        ["asc"]
+        ["asc"],
       );
       return skins;
     }, {}),
@@ -170,10 +170,10 @@ async function getSkinManifest({
         [...modelSkins.keys()].filter(
           (skinName) =>
             !modelSkins.get(skinName).dateFirstSeen ||
-            modelSkins.get(skinName).dateFirstSeen.getTime() > nineMonthsAgo
+            modelSkins.get(skinName).dateFirstSeen.getTime() > newCutoffDate,
         ),
         [(name) => name.toLowerCase()],
-        ["asc"]
+        ["asc"],
       );
       return skins;
     }, {}),
