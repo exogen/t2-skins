@@ -12,9 +12,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Prepare upload
+        run: |
+          mkdir -p _r2/skins
+          cp docs/skins.json _r2/skins/manifest.json
+          ln -s "$PWD/docs/gallery" _r2/skins/gallery
+          ln -s "$PWD/docs/skins" _r2/skins/files
+
       - name: Sync to R2
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           AWS_ENDPOINT_URL: https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com
-        run: aws s3 sync docs/ s3://t2-assets/skins/ --delete
+        run: aws s3 sync _r2/skins/ s3://t2-assets/skins/ --follow-symlinks --delete
