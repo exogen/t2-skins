@@ -1,28 +1,54 @@
 name: Deploy to R2
 
+# Sync docs/ to R2, then purge changed URLs. Failed purges stay pending in R2.
+
 on:
   push:
     branches: [main]
     paths:
       - ".github/workflows/deploy.yml"
       - "docs/**"
+      - "sync.mjs"
+      - "r2Sync*.mjs"
+      - "skinAssets*.mjs"
+      - "package.json"
+      - "package-lock.json"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Plan the sync and purge without changing anything
+        type: boolean
+        default: false
+
+# One deploy at a time: a running sync always finishes, and only the newest
+# queued push runs after it.
+concurrency:
+  group: r2-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Prepare upload
-        run: |
-          mkdir -p _r2/skins
-          cp docs/skins.json _r2/skins/manifest.json
-          ln -s "$PWD/docs/gallery" _r2/skins/gallery
-          ln -s "$PWD/docs/skins" _r2/skins/files
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
 
-      - name: Sync to R2
+      - run: npm ci
+        env:
+          # puppeteer is only for the gallery script; skip its browser download.
+          PUPPETEER_SKIP_DOWNLOAD: "1"
+
+      - run: npm test
+
+      - name: Sync skins and purge changed URLs
+        run: npm run sync -- ${{ inputs.dry_run && '--dry-run' || '' }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           AWS_ENDPOINT_URL: https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com
-        run: aws s3 sync _r2/skins/ s3://t2-assets/skins/ --follow-symlinks --delete
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PURGE_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}

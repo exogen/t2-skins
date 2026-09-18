@@ -2,7 +2,9 @@
   "scripts": {
     "build": "node build.mjs",
     "gallery": "node gallery.mjs",
-    "optimize": "oxipng --opt=max --strip=safe --preserve -r docs/skins"
+    "optimize": "oxipng --opt=max --strip=safe --preserve -r docs/skins",
+    "sync": "node sync.mjs",
+    "test": "node --test"
   },
   "dependencies": {
     "globby": "^14.0.2",
@@ -10,5 +12,8 @@
     "pngjs": "^7.0.0",
     "probe-image-size": "^7.2.3",
     "puppeteer": "^23.6.0"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1135.0"
   }
 }
