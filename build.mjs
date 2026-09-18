@@ -1,9 +1,8 @@
 import fs from "fs";
 import path from "path";
-import { globby } from "globby";
 import orderBy from "lodash.orderby";
 import { parseArgs } from "util";
-import { allModels, fileArrayToModels } from "./modelData.mjs";
+import { allModels, findModelSkins } from "./modelData.mjs";
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -43,22 +42,10 @@ async function getSkinManifest({
     };
   }
 
-  const skinPaths = await globby(`./docs/skins/**/*.png`);
-
-  const foundModels = fileArrayToModels(
-    skinPaths,
-    (path) => {
-      const parts = path.split("/");
-      if (parts.length === 4) {
-        return null;
-      } else {
-        return parts[3];
-      }
-    },
-    {
-      readModificationDate: true,
-    },
-  );
+  const foundModels = await findModelSkins({
+    readModificationDate: true,
+    includeIncomplete: values.debug,
+  });
 
   if (values.debug) {
     const allSkins = [];
@@ -96,8 +83,8 @@ async function getSkinManifest({
     const newPack = { skins: {} };
     for (const modelName in oldPack.skins) {
       const modelSkins = foundModels.get(modelName) ?? new Map();
-      const skinsThatStillExist = oldPack.skins[modelName].filter(
-        (skinName) => modelSkins.get(skinName)?.isComplete,
+      const skinsThatStillExist = oldPack.skins[modelName].filter((skinName) =>
+        modelSkins.has(skinName),
       );
       if (skinsThatStillExist.length) {
         newPack.skins[modelName] = skinsThatStillExist;
@@ -115,9 +102,6 @@ async function getSkinManifest({
         const modelSkins = foundModels.get(modelName) ?? new Map();
         for (const skinName of modelSkins.keys()) {
           const skin = modelSkins.get(skinName);
-          if (!skin.isComplete) {
-            continue;
-          }
           const allFiles = new Set(
             Array.from(skin.files.values())
               .flat()
@@ -184,31 +168,24 @@ async function getSkinManifest({
     });
   });
 
+  const customSkins = {};
+  const newSkins = {};
+  for (const name of allModels) {
+    const modelSkins = foundModels.get(name) ?? new Map();
+    customSkins[name] = orderBy(
+      [...modelSkins.keys()],
+      [(name) => name.toLowerCase()],
+      ["asc"],
+    );
+    newSkins[name] = customSkins[name].filter((skinName) => {
+      const { dateFirstSeen } = modelSkins.get(skinName);
+      return !dateFirstSeen || dateFirstSeen.getTime() > newCutoffDate;
+    });
+  }
+
   return {
-    customSkins: allModels.reduce((skins, name, i) => {
-      const modelSkins = foundModels.get(name) ?? new Map();
-      skins[name] = orderBy(
-        [...modelSkins.keys()].filter(
-          (skinName) => modelSkins.get(skinName).isComplete,
-        ),
-        [(name) => name.toLowerCase()],
-        ["asc"],
-      );
-      return skins;
-    }, {}),
-    newSkins: allModels.reduce((skins, name, i) => {
-      const modelSkins = foundModels.get(name) ?? new Map();
-      skins[name] = orderBy(
-        [...modelSkins.keys()].filter(
-          (skinName) =>
-            !modelSkins.get(skinName).dateFirstSeen ||
-            modelSkins.get(skinName).dateFirstSeen.getTime() > newCutoffDate,
-        ),
-        [(name) => name.toLowerCase()],
-        ["asc"],
-      );
-      return skins;
-    }, {}),
+    customSkins,
+    newSkins,
     packs: newPacks,
     sizeMultiplier,
   };

@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { execFileSync } from "child_process";
+import { globby } from "globby";
 import probe from "probe-image-size";
 import { resizePng } from "./resize.mjs";
 
@@ -500,7 +501,7 @@ function getFrameInfo(nameWithoutExtension) {
 
 export function fileToModels(path, skinName = null) {
   const basename = path.split("/").slice(-1)[0];
-  const match = basename.match(/^(.+)\.(PNG|png)$/);
+  const match = basename.match(/^(.+)\.(png)$/i);
   if (match) {
     const nameWithoutExtension = match[1];
     const parts = nameWithoutExtension.split(".");
@@ -546,6 +547,40 @@ export function fileToModels(path, skinName = null) {
   return null;
 }
 
+// Both the manifest and gallery use this catalog. Incomplete skins are only
+// included when requested for diagnostics.
+export async function findModelSkins({
+  readModificationDate = false,
+  includeIncomplete = false,
+} = {}) {
+  const skinDir = "./docs/skins";
+  if (!fs.statSync(skinDir).isDirectory()) {
+    throw new Error(`Expected a directory at ${skinDir}`);
+  }
+  const skinPaths = await globby(`${skinDir}/**/*.png`, {
+    caseSensitiveMatch: false,
+  });
+  if (!skinPaths.length) {
+    throw new Error(`No PNG skins found under ${skinDir}`);
+  }
+  const foundModels = fileArrayToModels(
+    skinPaths,
+    (filePath) => {
+      const parts = path.relative(skinDir, filePath).split(path.sep);
+      return parts.length > 1 ? parts[0] : null;
+    },
+    { readModificationDate },
+  );
+  if (!includeIncomplete) {
+    for (const skins of foundModels.values()) {
+      for (const [name, skin] of skins) {
+        if (!name || !skin.isComplete) skins.delete(name);
+      }
+    }
+  }
+  return foundModels;
+}
+
 export function fileArrayToModels(
   paths,
   getSkinName = () => null,
@@ -584,7 +619,7 @@ export function fileArrayToModels(
             path.relative("docs/skins", fullPath),
             sizeMultiplier
           );
-          const outPath = fullPath.replace(/\.png$/, "@1x.png");
+          const outPath = fullPath.replace(/\.png$/i, "@1x.png");
           console.log(
             `Resizing: ${path.relative(
               "docs/skins",

@@ -1,60 +1,30 @@
 import fs from "fs";
-import { globby } from "globby";
+import { setTimeout as sleep } from "node:timers/promises";
 import puppeteer from "puppeteer";
-import { fileArrayToModels } from "./modelData.mjs";
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-const browser = await puppeteer.launch();
-const page = await browser.newPage();
-
-// await page.exposeFunction("onMaterialReady", (event) => {
-//   console.log("material-ready:", event);
-// });
-
-// await page.evaluateOnNewDocument(() => {
-//   window.addEventListener("material-ready", (e) => {
-//     window.onMaterialReady(e);
-//   });
-// });
-
-await page.goto("https://exogen.github.io/t2-model-skinner/", {
-  waitUntil: "load",
-});
-
-await page.waitForNetworkIdle({ idleTime: 2000 });
-
-await page.setViewport({ width: 680, height: 800 });
-
-const modelSelector = await page.waitForSelector("#ModelSelect");
-const fileInput = await page.waitForSelector(
-  '#SkinSelect ~ input[type="file"]'
-);
-
-const outputType = "webp";
-
-async function findModelSkins() {
-  const skinPaths = await globby(`./docs/skins/**/*.png`);
-
-  const foundModels = fileArrayToModels(skinPaths, (path) => {
-    const parts = path.split("/");
-    if (parts.length === 4) {
-      return null;
-    } else {
-      return parts[3];
-    }
-  });
-
-  return foundModels;
-}
+import { findModelSkins } from "./modelData.mjs";
 
 const foundModelSkins = await findModelSkins();
+const browser = await puppeteer.launch();
+try {
+  const page = await browser.newPage();
 
-for (const [modelName, skinsByName] of foundModelSkins.entries()) {
-  for (const [skinName, skin] of skinsByName.entries()) {
-    if (skinName && skin.isComplete) {
+  await page.goto("https://exogen.github.io/t2-model-skinner/", {
+    waitUntil: "load",
+  });
+
+  await page.waitForNetworkIdle({ idleTime: 2000 });
+
+  await page.setViewport({ width: 680, height: 800 });
+
+  const modelSelector = await page.waitForSelector("#ModelSelect");
+  const fileInput = await page.waitForSelector(
+    '#SkinSelect ~ input[type="file"]',
+  );
+
+  const outputType = "webp";
+
+  for (const [modelName, skinsByName] of foundModelSkins.entries()) {
+    for (const [skinName, skin] of skinsByName.entries()) {
       const outputPath = `./docs/gallery/${skinName}.${modelName}.${outputType}`;
       if (fs.existsSync(outputPath)) {
         console.log(`${outputPath} (skipped)`);
@@ -82,6 +52,6 @@ for (const [modelName, skinsByName] of foundModelSkins.entries()) {
       }
     }
   }
+} finally {
+  await browser.close();
 }
-
-await browser.close();
