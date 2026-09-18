@@ -190,24 +190,43 @@ export function createStore(client) {
 }
 
 /** Bounded concurrency, waiting for active jobs even if one fails. */
-async function concurrent(items, concurrency, action) {
+async function concurrent(items, concurrency, action, log, label) {
+  if (!items.length) return;
   let next = 0;
+  let completed = 0;
   let failed = false;
-  const results = await Promise.allSettled(
-    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-      while (!failed && next < items.length) {
-        const item = items[next++];
-        try {
-          await action(item);
-        } catch (error) {
-          failed = true;
-          throw error;
+  const started = Date.now();
+  const report = () => {
+    const percent = Math.floor((completed / items.length) * 100);
+    const seconds = Math.floor((Date.now() - started) / 1000);
+    log(
+      `${label}: ${completed}/${items.length} (${percent}%, ${seconds}s elapsed)${failed ? " — failed" : ""}`,
+    );
+  };
+  report();
+  const timer = setInterval(report, 5000);
+  timer.unref();
+  try {
+    const results = await Promise.allSettled(
+      Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+        while (!failed && next < items.length) {
+          const item = items[next++];
+          try {
+            await action(item);
+            completed++;
+          } catch (error) {
+            failed = true;
+            throw error;
+          }
         }
-      }
-    }),
-  );
-  for (const result of results) {
-    if (result.status === "rejected") throw result.reason;
+      }),
+    );
+    report();
+    for (const result of results) {
+      if (result.status === "rejected") throw result.reason;
+    }
+  } finally {
+    clearInterval(timer);
   }
 }
 
@@ -236,14 +255,22 @@ export async function syncAssets(options) {
     throw new Error("Refusing to synchronize an empty source.");
   }
 
+  log("Reading sync state from R2...");
   const previous = await store.readState();
+  log("Listing remote objects...");
   const remote = await store.list();
 
   const uploads = [];
-  await concurrent([...files], concurrency, async ([key, file]) => {
-    if (await matchesRemote(file, remote.get(key))) return;
-    uploads.push(key);
-  });
+  await concurrent(
+    [...files],
+    concurrency,
+    async ([key, file]) => {
+      if (await matchesRemote(file, remote.get(key))) return;
+      uploads.push(key);
+    },
+    log,
+    "Comparing files",
+  );
   uploads.sort();
 
   const policyChanged = previous?.value.policy !== policy;
@@ -293,30 +320,46 @@ export async function syncAssets(options) {
   if (changed) {
     // Journal before touching assets. Invalidate the policy while rewriting
     // headers, so even a rollback after a partial failure repairs them all.
+    log("Saving pending purge list...");
     etag = await store.writeState(
       { version: 1, policy: policyChanged ? null : policy, report },
       etag,
     );
     const upload = async (key) => {
       await store.upload(key, files.get(key), metadataFor(key));
-      log(`Uploaded ${key}`);
     };
     await concurrent(
       uploads.filter((key) => key !== MANIFEST_KEY),
       concurrency,
       upload,
+      log,
+      "Uploading images",
     );
-    await concurrent(metadataUpdates, concurrency, async (key) => {
-      await store.updateMetadata(key, metadataFor(key));
-    });
+    await concurrent(
+      metadataUpdates,
+      concurrency,
+      async (key) => {
+        await store.updateMetadata(key, metadataFor(key));
+      },
+      log,
+      "Rewriting headers",
+    );
     // Publish the manifest only after all the files it can reference exist.
-    if (uploading.has(MANIFEST_KEY)) await upload(MANIFEST_KEY);
+    if (uploading.has(MANIFEST_KEY)) {
+      log("Uploading manifest...");
+      await upload(MANIFEST_KEY);
+    }
+    if (deletions.length)
+      log(`Deleting ${deletions.length} removed objects...`);
     for (let i = 0; i < deletions.length; i += 1000) {
       await store.delete(deletions.slice(i, i + 1000));
+      log(
+        `Deleted ${Math.min(i + 1000, deletions.length)}/${deletions.length} objects.`,
+      );
     }
-    for (const key of deletions) log(`Deleted ${key}`);
   }
   if (changed || policyChanged) {
+    log("Saving completed sync state...");
     etag = await store.writeState({ version: 1, policy, report }, etag);
   }
   return { ...counts, report, etag };
@@ -334,6 +377,7 @@ export async function purgeAssets(keys, options) {
   const urls = keys.map(
     (key) => PUBLIC_PREFIX + key.split("/").map(encodeURIComponent).join("/"),
   );
+  log(`Purging ${urls.length} URLs from the Cloudflare cache...`);
   // https://developers.cloudflare.com/cache/how-to/purge-cache/#single-file-purge-limits
   for (let i = 0; i < urls.length; i += 100) {
     for (let attempt = 0; ; attempt++) {
@@ -389,6 +433,7 @@ export async function deployAssets(options) {
     );
   } else {
     await purgeAssets(result.report, options);
+    log("Clearing pending purge list...");
     await store.writeState(
       { version: 1, policy: policyHash(), report: [] },
       result.etag,
