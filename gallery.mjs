@@ -1,7 +1,7 @@
 import fs from "fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import puppeteer from "puppeteer";
-import { findModelSkins } from "./modelData.mjs";
+import { findModelSkins, fileToModels } from "./modelData.mjs";
 
 const foundModelSkins = await findModelSkins();
 const browser = await puppeteer.launch();
@@ -26,6 +26,8 @@ try {
       } else {
         console.log(outputPath);
         const paths = Array.from(skin.files.values()).flat();
+        // Loose weapon/vehicle PNGs have no skin name embedded in the filename.
+        const importedSkinName = fileToModels(paths[0])?.skinName ?? "__untitled__";
         // Model and skin changes remount the editor's controls.
         const modelSelector = await page.waitForSelector("#ModelSelect");
         await modelSelector.select(modelName);
@@ -36,14 +38,16 @@ try {
           '#SkinSelect ~ input[type="file"]',
         );
         await fileInput.uploadFile(...paths);
-        await fileInput.dispose();
         await page.waitForFunction(
-          (modelName, skinName) => {
+          (modelName, skinName, fileInput) => {
             const error = document.querySelector('[role="alert"]');
             if (error) throw new Error(error.textContent);
             const viewer = document.querySelector("model-viewer");
             const actualModel = modelName === "hfemale" ? "hmale" : modelName;
             return (
+              // Names can repeat across models. Wait for this import to
+              // remount the editor, rather than accepting the old selection.
+              !fileInput.isConnected &&
               document.querySelector("#ModelSelect")?.value === modelName &&
               document.querySelector("#SkinSelect")?.value ===
                 `import/${skinName}` &&
@@ -53,8 +57,10 @@ try {
           },
           {},
           modelName,
-          skinName,
+          importedSkinName,
+          fileInput,
         );
+        await fileInput.dispose();
         await page.waitForNetworkIdle({ idleTime: 2000 });
         await sleep(1000);
         const modelViewer = await page.waitForSelector("model-viewer");
