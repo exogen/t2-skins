@@ -12,6 +12,16 @@ they must be added to this repo and deployed after running the `build` script,
 which updates the JSON manifest. To get them to appear on the [gallery page](https://exogen.github.io/t2-model-skinner/gallery/),
 both the `build` and `gallery` scripts must be run.
 
+## Extracting `.vl2` files
+
+`node extract-vl2.mjs "path/**/*.vl2"` unpacks player skins into `docs/skins/`
+and prompts for a new name when a skin with the same name already exists.
+Pass `--overwrite` to replace the existing files instead. Replaced files
+keep their on-disk name, and their screenshots in `docs/gallery/` are
+deleted so the next `gallery` run re-renders them. The `build` script
+does not treat a replaced skin as new, and a pack containing it only
+bumps its version if the pack's file list changed.
+
 ## Deploying to R2
 
 Pushing to `main` runs [the deploy workflow](.github/workflows/deploy.yml),
