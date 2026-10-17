@@ -11,6 +11,15 @@ const GALLERY_DIR = "./docs/gallery";
 const PLAYER_PATTERN =
   /^(.+)\.(l|m|h)(male|female|bioderm)\.png$/i;
 
+// OS clutter that ends up in .vl2 files zipped from Explorer or Finder.
+// Dotfiles are skipped too, which covers .DS_Store and the ._foo.png
+// AppleDouble files that __MACOSX folders flatten into.
+const JUNK_FILES = new Set(["thumbs.db", "ehthumbs.db", "desktop.ini", "icon\r"]);
+
+function isJunkFile(basename) {
+  return basename.startsWith(".") || JUNK_FILES.has(basename.toLowerCase());
+}
+
 async function prompt(question) {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
@@ -144,9 +153,12 @@ for (const vl2 of vl2Files) {
     continue;
   }
 
-  const files = fs.readdirSync(tmpDir).filter((f) =>
+  const allFiles = fs.readdirSync(tmpDir).filter((f) =>
     fs.statSync(path.join(tmpDir, f)).isFile()
   );
+  const files = allFiles.filter((f) => !isJunkFile(f));
+  const skipped = allFiles.filter(isJunkFile);
+  if (skipped.length) console.log(`  Skipping: ${skipped.join(", ")}`);
 
   // Group player skins by their name prefix.
   const skinGroups = new Map(); // skinName -> [{ basename, suffix }]
