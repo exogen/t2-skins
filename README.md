@@ -1,6 +1,6 @@
 # t2-skins
 
-<table align="center">
+<table align="center" border="0">
   <tr>
     <td>
       <a href="https://github.com/exogen/t2-skins/releases/latest/download/zPlayerSkins-All.vl2"><img src=".github/images/download-player-skins-sd.png" alt="Download all player skins — standard resolution textures (VL2)" width="320"></a>
