@@ -1,6 +1,6 @@
 # t2-skins
 
-<table>
+<table align="center">
   <tr>
     <td>
       <a href="https://github.com/exogen/t2-skins/releases/latest/download/zPlayerSkins-All.vl2"><img src=".github/images/download-player-skins-sd.png" alt="Download all player skins — standard resolution textures (VL2)" width="320"></a>
@@ -14,8 +14,9 @@
 Custom, fan-made skins for **Tribes 2**. The buttons above download all player
 skins in a single `.vl2` file.
 
-Choose **SD** for standard resolution or **HD** for hi-res textures
-(**QoL patch required**). Both versions include the same skins.
+Choose **SD** for standard resolution or **HD** for hi-res textures (**QoL patch
+required**). Both versions include the same skins, with the SD release downscaling
+any HD skins (a small minority of the collection).
 
 **Install:** Put **one** of the downloaded `.vl2` files in your Tribes 2
 `GameData/base/` folder.
