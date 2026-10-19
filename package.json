@@ -1,6 +1,7 @@
 {
   "scripts": {
     "build": "node build.mjs",
+    "build:player-skins": "node buildPlayerSkins.mjs",
     "gallery": "node gallery.mjs",
     "optimize": "oxipng --opt=max --strip=safe --preserve -r docs/skins",
     "sync": "node sync.mjs",
