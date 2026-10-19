@@ -42,8 +42,8 @@ jobs:
       - run: npm test
       - run: npm run build:player-skins
 
-      - name: Generate release notes
-        id: notes
+      - name: Prepare release
+        id: release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -54,22 +54,26 @@ jobs:
           if [[ -n "$previous_tag" ]]; then
             git fetch --no-tags --depth=1 origin "refs/tags/$previous_tag:refs/tags/$previous_tag"
           fi
-          release_date="$(date -u +%Y-%m-%d)"
-          release_tag="player-skins-${release_date}-${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
-          echo "tag=$release_tag" >> "$GITHUB_OUTPUT"
-          echo "title=Player skins — ${release_date} (build ${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT})" >> "$GITHUB_OUTPUT"
-          PREVIOUS_PLAYER_SKINS_TAG="$previous_tag" PLAYER_SKINS_TAG="$release_tag" \
-            node playerSkinRelease.mjs
+          release_version="$(date -u +%Y-%m-%d).${GITHUB_RUN_NUMBER}"
+          if [[ "$GITHUB_RUN_ATTEMPT" != "1" ]]; then
+            release_version="${release_version}.${GITHUB_RUN_ATTEMPT}"
+          fi
+          echo "tag=player-skins-${release_version}" >> "$GITHUB_OUTPUT"
+          echo "title=$release_version" >> "$GITHUB_OUTPUT"
+          PREVIOUS_PLAYER_SKINS_TAG="$previous_tag" node playerSkinRelease.mjs
 
       - name: Publish player skin downloads
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ steps.notes.outputs.tag }}
-          RELEASE_TITLE: ${{ steps.notes.outputs.title }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_TITLE: ${{ steps.release.outputs.title }}
         run: |
-          gh release create "$RELEASE_TAG" dist/player-skins/*.vl2 \
-            dist/player-skins/player-skin-changes.md \
+          gh release create "$RELEASE_TAG" \
+            "dist/player-skins/zPlayerSkins-All.vl2#SD — Standard resolution" \
+            "dist/player-skins/zPlayerSkins-All-HD.vl2#HD — QoL patch required" \
             --target "$GITHUB_SHA" --title "$RELEASE_TITLE" --latest \
             --notes-file dist/player-skins/release-notes.md
+          printf '[View release and downloads](%s/%s/releases/tag/%s)\n\n' \
+            "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
           cat dist/player-skins/release-notes.md >> "$GITHUB_STEP_SUMMARY"

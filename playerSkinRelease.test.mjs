@@ -59,13 +59,11 @@ test("notes compare all player files against the previous release, including ski
 });
 
 const metadata = {
-  previous: "player-skins-baseline", current: "abcdef0123456789",
-  tag: "player-skins-2026-10-19-42.1", repositoryUrl: "https://github.com/exogen/t2-skins",
-  builtAt: "2026-10-19T12:00:00.000Z",
+  previous: "player-skins-baseline", repositoryUrl: "https://github.com/exogen/t2-skins",
 };
 
-test("release notes list added, removed and updated filenames with dates and versioned downloads", () => {
-  const { notes, full } = playerSkinReleaseNotes({
+test("release notes list added, removed and updated filenames inline", () => {
+  const notes = playerSkinReleaseNotes({
     ...metadata,
     changes: {
       added: ["docs/skins/New <&`skin`.lmale.png"],
@@ -73,34 +71,25 @@ test("release notes list added, removed and updated filenames with dates and ver
       updated: ["docs/skins/Updated.mfemale.png"],
     },
   });
-  assert.equal(notes, full);
-  assert.match(notes, /1 added, 1 removed, 1 updated/);
+  assert.ok(notes.includes(`/releases/tag/${metadata.previous}`));
   assert.match(notes, /### Added \(1\)/);
   assert.match(notes, /New &lt;&amp;`skin`\.lmale\.png/);
   assert.match(notes, /### Removed \(1\)/);
   assert.match(notes, /Removed\.hmale\.png/);
   assert.match(notes, /### Updated \(1\)/);
   assert.match(notes, /Updated\.mfemale\.png/);
-  assert.match(notes, /2026-10-19T12:00:00.000Z/);
-  assert.ok(notes.includes(`/releases/download/${metadata.tag}/zPlayerSkins-All-HD.vl2`));
-  assert.ok(notes.includes(`/releases/download/${metadata.tag}/player-skin-changes.md`));
+  assert.ok(!notes.includes("player-skin-changes.md"));
 });
 
 test("workflow-only rebuilds explicitly report that no player skin files changed", () => {
-  const { notes } = playerSkinReleaseNotes({ ...metadata, changes: { added: [], removed: [], updated: [] } });
-  assert.match(notes, /0 added, 0 removed, 0 updated/);
-  assert.match(notes, /No player skin files changed/);
+  const notes = playerSkinReleaseNotes({ ...metadata, changes: { added: [], removed: [], updated: [] } });
+  assert.equal(notes, "No player skin files changed.\n");
 });
 
-test("large initial releases keep every filename in the attachment and a bounded release body", () => {
+test("initial releases omit the filename list even for thousands of skins", () => {
   const added = Array.from({ length: 6000 }, (_, index) => `docs/skins/Skin number ${index}.lmale.png`);
-  const { notes, full } = playerSkinReleaseNotes({
+  const notes = playerSkinReleaseNotes({
     ...metadata, previous: null, changes: { added, removed: [], updated: [] },
   });
-  assert.ok(Buffer.byteLength(notes) <= 60000);
-  assert.ok(Buffer.byteLength(full) > 60000);
-  assert.match(notes, /Initial release: \*\*6000 player skin files/);
-  assert.match(notes, /attached report/);
-  assert.equal((full.match(/^- <code>/gm) || []).length, 6000);
-  assert.ok(full.includes("Skin number 5999.lmale.png"));
+  assert.equal(notes, "Initial release.\n");
 });

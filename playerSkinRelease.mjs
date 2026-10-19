@@ -40,24 +40,10 @@ function fileLabel(file) {
 }
 
 export function playerSkinReleaseNotes({
-  changes, previous, current, tag, repositoryUrl, builtAt = new Date().toISOString(),
+  changes, previous, repositoryUrl,
 }) {
-  const download = `${repositoryUrl}/releases/download/${encodeURIComponent(tag)}`;
-  const counts = ["added", "removed", "updated"].map((kind) => `${changes[kind].length} ${kind}`).join(", ");
-  const introduction = [
-    `Built at **${builtAt}** (UTC) from [${current.slice(0, 12)}](${repositoryUrl}/commit/${current}).`,
-    "",
-    "Download all player skins in one VL2:",
-    "",
-    `- [Standard resolution](${download}/zPlayerSkins-All.vl2): 1× textures.`,
-    `- [Including HD](${download}/zPlayerSkins-All-HD.vl2): original textures, including HD where available.`,
-    "",
-    "Install **one** file in your Tribes 2 **GameData/base/** folder.",
-    "",
-    previous
-      ? `Changes since [${previous}](${repositoryUrl}/releases/tag/${encodeURIComponent(previous)}): **${counts}**.`
-      : `Initial release: **${changes.added.length} player skin files**, including prepared @1x copies. All are listed as added below.`,
-  ];
+  if (!previous) return "Initial release.\n";
+
   const sections = [];
   for (const [kind, title] of [["added", "Added"], ["removed", "Removed"], ["updated", "Updated"]]) {
     if (changes[kind].length) {
@@ -65,32 +51,26 @@ export function playerSkinReleaseNotes({
         ...changes[kind].map((file) => `- ${fileLabel(file)}`));
     }
   }
-  if (!sections.length) sections.push("", "No player skin files changed. This release rebuilds the existing collection.");
-  const changesUrl = `${download}/player-skin-changes.md`;
-  const footer = ["", `[Complete file change list](${changesUrl}).`, ""];
-  const full = [...introduction, ...sections, ...footer].join("\n");
-  // The first release can list thousands of files. Keep the release body small
-  // and attach the complete Markdown report, without dropping any filenames.
-  const notes = Buffer.byteLength(full) <= 60000 ? full : [
-    ...introduction, "", "The full filename list is in the attached report.", ...footer,
-  ].join("\n").replace("All are listed as added below.", "All are listed as added in the attached report.");
-  return { notes, full };
+  if (!sections.length) return "No player skin files changed.\n";
+  return [
+    `Changes since the [previous release](${repositoryUrl}/releases/tag/${encodeURIComponent(previous)}).`,
+    ...sections, "",
+  ].join("\n");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { GITHUB_REPOSITORY, GITHUB_SHA, PLAYER_SKINS_TAG, PREVIOUS_PLAYER_SKINS_TAG } = process.env;
-  if (!GITHUB_REPOSITORY || !GITHUB_SHA || !PLAYER_SKINS_TAG) {
-    throw new Error("GITHUB_REPOSITORY, GITHUB_SHA and PLAYER_SKINS_TAG are required");
+  const { GITHUB_REPOSITORY, GITHUB_SHA, PREVIOUS_PLAYER_SKINS_TAG } = process.env;
+  if (!GITHUB_REPOSITORY || !GITHUB_SHA) {
+    throw new Error("GITHUB_REPOSITORY and GITHUB_SHA are required");
   }
   const previous = PREVIOUS_PLAYER_SKINS_TAG || null;
   const changes = playerSkinChanges(previous, GITHUB_SHA);
-  const report = playerSkinReleaseNotes({
-    changes, previous, current: GITHUB_SHA, tag: PLAYER_SKINS_TAG,
+  const notes = playerSkinReleaseNotes({
+    changes, previous,
     repositoryUrl: `${process.env.GITHUB_SERVER_URL || "https://github.com"}/${GITHUB_REPOSITORY}`,
   });
   const output = process.argv[2] || "dist/player-skins";
   await fs.mkdir(output, { recursive: true });
-  await fs.writeFile(path.join(output, "release-notes.md"), report.notes);
-  await fs.writeFile(path.join(output, "player-skin-changes.md"), report.full);
+  await fs.writeFile(path.join(output, "release-notes.md"), notes);
   console.log(`Player skin changes: ${changes.added.length} added, ${changes.removed.length} removed, ${changes.updated.length} updated.`);
 }

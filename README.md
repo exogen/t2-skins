@@ -25,6 +25,8 @@ The buttons always download the latest release.
 are also available. To browse or download individual skins, visit the
 [skin gallery](https://skins.tribes2.online/gallery/).
 
+For update notifications, choose **Watch → Custom → Releases** on this repo.
+
 These skins are also used by:
 
 - [t2-model-skinner](https://github.com/exogen/t2-model-skinner) — [Open the app](https://skins.tribes2.online/)
