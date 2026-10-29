@@ -32,3 +32,17 @@ These skins are also used by:
 
 - [t2-model-skinner](https://github.com/exogen/t2-model-skinner) — [Open the app](https://skins.tribes2.online/)
 - [MapGenius](https://github.com/exogen/t2-mapper) — [Open the app](https://play.tribes2.online/)
+
+## Updating the manifest and gallery
+
+After adding or changing skins in `docs/skins/`, run:
+
+```sh
+npm run build
+npm run gallery
+```
+
+The gallery command skips existing previews. Use `npm run gallery -- --force`
+to regenerate them all.
+
+Add `--concurrency 4` to generate previews with four parallel workers.

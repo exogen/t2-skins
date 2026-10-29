@@ -1,5 +1,6 @@
 {
   "scripts": {
+    "average": "node averageSkins.mjs",
     "build": "node build.mjs",
     "build:player-skins": "node buildPlayerSkins.mjs",
     "gallery": "node gallery.mjs",
