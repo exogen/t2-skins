@@ -5,9 +5,9 @@ import path from "node:path";
 import { globby } from "globby";
 
 export const MANIFEST_KEY = "manifest.json";
-export const MANIFEST_CACHE_CONTROL = "max-age=300";
+export const MANIFEST_CACHE_CONTROL = "public, max-age=120, must-revalidate";
 export const ASSET_CACHE_CONTROL =
-  "max-age=86400, stale-while-revalidate=604800";
+  "public, max-age=120, stale-while-revalidate=120";
 
 const CONTENT_TYPES = {
   ".json": "application/json",

@@ -12,7 +12,7 @@ import {
   unknownExtensions,
 } from "./skinAssets.mjs";
 
-test("the manifest is cached briefly and images for longer", () => {
+test("manifests revalidate after two minutes; images allow two more minutes of stale reuse", () => {
   assert.deepEqual(metadataFor("manifest.json"), {
     contentType: "application/json",
     cacheControl: MANIFEST_CACHE_CONTROL,
@@ -23,10 +23,10 @@ test("the manifest is cached briefly and images for longer", () => {
   });
   assert.equal(metadataFor("gallery/x.webp").contentType, "image/webp");
   assert.equal(metadataFor("files/readme.txt"), undefined);
-  assert.match(MANIFEST_CACHE_CONTROL, /^max-age=300$/);
-  assert.match(
+  assert.equal(MANIFEST_CACHE_CONTROL, "public, max-age=120, must-revalidate");
+  assert.equal(
     ASSET_CACHE_CONTROL,
-    /^max-age=\d+, stale-while-revalidate=\d+$/,
+    "public, max-age=120, stale-while-revalidate=120",
   );
   assert.match(policyHash(), /^[0-9a-f]{64}$/);
 });
