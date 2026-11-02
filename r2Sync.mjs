@@ -373,13 +373,18 @@ export async function purgeAssets(keys, options) {
     request = fetch,
     sleep = setTimeout,
   } = options;
-  // Encode filenames, including literal spaces, #, ? and %, as URL paths.
-  const urls = keys.map(
-    (key) => PUBLIC_PREFIX + key.split("/").map(encodeURIComponent).join("/"),
+  // Prefix purges include every Origin/cache-key variant of a changed asset.
+  // Bare URL purges can leave the gallery's CORS-specific cache entry behind.
+  // Cloudflare expects prefixes without a scheme. Encode literal #, ? and %
+  // as path characters, not fragments or query strings.
+  const publicUrl = new URL(PUBLIC_PREFIX);
+  const publicPath = publicUrl.host + publicUrl.pathname;
+  const prefixes = keys.map(
+    (key) => publicPath + key.split("/").map(encodeURIComponent).join("/"),
   );
-  log(`Purging ${urls.length} URLs from the Cloudflare cache...`);
-  // https://developers.cloudflare.com/cache/how-to/purge-cache/#single-file-purge-limits
-  for (let i = 0; i < urls.length; i += 100) {
+  log(`Purging all cache variants of ${prefixes.length} asset paths...`);
+  // https://developers.cloudflare.com/cache/how-to/purge-cache/purge_by_prefix/
+  for (let i = 0; i < prefixes.length; i += 100) {
     for (let attempt = 0; ; attempt++) {
       let response;
       try {
@@ -391,7 +396,7 @@ export async function purgeAssets(keys, options) {
               Authorization: `Bearer ${apiToken}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ files: urls.slice(i, i + 100) }),
+            body: JSON.stringify({ prefixes: prefixes.slice(i, i + 100) }),
             signal: AbortSignal.timeout(30_000),
           },
         );
@@ -409,15 +414,19 @@ export async function purgeAssets(keys, options) {
         ) {
           throw error;
         }
+        // Free-plan prefix purges refill at five requests per minute.
         const delay = Math.max(
           1000 * 2 ** attempt,
-          Number(response?.headers.get("retry-after")) * 1000 || 0,
+          Number(response?.headers.get("retry-after")) * 1000 ||
+            (response?.status === 429 ? 12_000 : 0),
         );
         log(`Purge failed; retrying in ${delay}ms.`);
         await sleep(delay);
       }
     }
-    log(`Purged ${Math.min(i + 100, urls.length)}/${urls.length} URLs.`);
+    log(
+      `Purged ${Math.min(i + 100, prefixes.length)}/${prefixes.length} asset paths.`,
+    );
   }
 }
 

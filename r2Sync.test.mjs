@@ -259,9 +259,9 @@ test("a successful deploy purges and clears the journal, including old pending U
   );
   assert.deepEqual(bodies, [
     {
-      files: [
-        "https://assets.tribes2.online/skins/a.png",
-        "https://assets.tribes2.online/skins/old.png",
+      prefixes: [
+        "assets.tribes2.online/skins/a.png",
+        "assets.tribes2.online/skins/old.png",
       ],
     },
   ]);
@@ -399,7 +399,7 @@ test("a partial metadata update invalidates the policy and repairs every object'
   assert.equal((await store.readState()).value.policy, policy);
 });
 
-test("large purges stay limited to the changed URLs and encode filenames", async () => {
+test("purges cover every Origin variant while staying limited to changed asset paths", async () => {
   const keys = Array.from({ length: 301 }, (_, i) => `files/${i}.png`);
   keys[0] = "files/Name #1?100%.png";
   const bodies = [];
@@ -413,14 +413,15 @@ test("large purges stay limited to the changed URLs and encode filenames", async
     },
   });
   assert.deepEqual(
-    bodies.map(({ files }) => files.length),
+    bodies.map(({ prefixes }) => prefixes.length),
     [100, 100, 100, 1],
   );
   assert.equal(
-    bodies[0].files[0],
-    "https://assets.tribes2.online/skins/files/Name%20%231%3F100%25.png",
+    bodies[0].prefixes[0],
+    "assets.tribes2.online/skins/files/Name%20%231%3F100%25.png",
   );
-  assert.ok(bodies.every((body) => !body.purge_everything));
+  assert.ok(bodies.every((body) => !body.purge_everything && !body.files));
+  assert.equal(bodies.flatMap(({ prefixes }) => prefixes).length, keys.length);
 });
 
 test("purges retry rate limits, server errors and connection errors", async () => {
@@ -433,6 +434,7 @@ test("purges retry rate limits, server errors and connection errors", async () =
         ),
       4000,
     ],
+    [() => Response.json({ success: false }, { status: 429 }), 12000],
     [() => new Response("unavailable", { status: 503 }), 1000],
     [
       () => {
