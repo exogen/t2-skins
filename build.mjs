@@ -37,6 +37,7 @@ async function getSkinManifest({
     previousManifest = {
       customSkins: {},
       newSkins: {},
+      awardWinners: {},
       packs: {},
       sizeMultiplier: {},
     };
@@ -183,9 +184,23 @@ async function getSkinManifest({
     });
   }
 
+  const awardWinners = {};
+  for (const [modelName, skinNames] of Object.entries(
+    previousManifest.awardWinners ?? {},
+  )) {
+    const modelSkins = foundModels.get(modelName) ?? new Map();
+    const existingWinners = skinNames.filter((skinName) =>
+      modelSkins.has(skinName),
+    );
+    if (existingWinners.length) {
+      awardWinners[modelName] = existingWinners;
+    }
+  }
+
   return {
     customSkins,
     newSkins,
+    awardWinners,
     packs: newPacks,
     sizeMultiplier,
   };
