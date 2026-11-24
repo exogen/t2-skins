@@ -1,10 +1,11 @@
 import fs from "fs";
 import path from "path";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { createInterface } from "readline";
+import { pathToFileURL } from "url";
 import { parseArgs } from "util";
 import { globby } from "globby";
-import { fileToModels } from "./modelData.mjs";
+import { fileToModels, skinFolderName } from "./modelData.mjs";
 
 const SKIN_DIR = "./docs/skins";
 const GALLERY_DIR = "./docs/gallery";
@@ -59,11 +60,22 @@ function copyInto(src, dir, name, overwrite) {
   return { destPath, replaced: existing !== null };
 }
 
+// Extracts every file in `vl2` into `destination`, flattening its folders.
+// The archive name never passes through a shell, and its absolute path can't
+// be mistaken for an unzip option.
+export function extractVl2(vl2, destination) {
+  // -o overwrite, -j junk paths (flatten)
+  execFileSync("unzip", ["-o", "-j", path.resolve(vl2), "-d", destination], {
+    stdio: "pipe",
+  });
+}
+
 // Removes stale gallery screenshots for a skin file so `gallery.mjs`
-// re-renders it. Returns the removed paths.
-function removeGalleryScreenshots(skinFilePath) {
-  const info = fileToModels(skinFilePath);
-  if (!info) return [];
+// re-renders it. A file in a skin folder belongs to the skin named by that
+// folder, as in discovery. Returns the removed paths.
+export function removeGalleryScreenshots(skinFilePath) {
+  const info = fileToModels(skinFilePath, skinFolderName(skinFilePath, SKIN_DIR));
+  if (!info?.skinName) return [];
   const removed = [];
   for (const { modelName } of info.models) {
     const name = `${info.skinName}.${modelName}.webp`;
@@ -116,120 +128,123 @@ function usage() {
   process.exit(1);
 }
 
-let values, positionals;
-try {
-  ({ values, positionals } = parseArgs({
-    allowPositionals: true,
-    options: {
-      overwrite: { type: "boolean", default: false },
-    },
-  }));
-} catch (err) {
-  console.error(err.message);
-  usage();
-}
-const overwrite = values.overwrite;
-if (!positionals.length) usage();
-
-const vl2Files = await globby(positionals);
-if (!vl2Files.length) {
-  console.error("No .vl2 files matched.");
-  process.exit(1);
-}
-
-for (const vl2 of vl2Files) {
-  console.log(`Processing: ${vl2}`);
-  let otherFolder = null;
-  const tmpDir = fs.mkdtempSync(path.join("/tmp", "vl2-"));
-
+async function main() {
+  let values, positionals;
   try {
-    // -o overwrite, -j junk paths (flatten)
-    execSync(`unzip -o -j ${JSON.stringify(vl2)} -d ${JSON.stringify(tmpDir)}`, {
-      stdio: "pipe",
-    });
-  } catch {
-    console.warn(`  Warning: failed to extract ${vl2}, skipping`);
-    fs.rmSync(tmpDir, { recursive: true });
-    continue;
+    ({ values, positionals } = parseArgs({
+      allowPositionals: true,
+      options: {
+        overwrite: { type: "boolean", default: false },
+      },
+    }));
+  } catch (err) {
+    console.error(err.message);
+    usage();
+  }
+  const overwrite = values.overwrite;
+  if (!positionals.length) usage();
+
+  const vl2Files = await globby(positionals);
+  if (!vl2Files.length) {
+    console.error("No .vl2 files matched.");
+    process.exit(1);
   }
 
-  const allFiles = fs.readdirSync(tmpDir).filter((f) =>
-    fs.statSync(path.join(tmpDir, f)).isFile()
-  );
-  const files = allFiles.filter((f) => !isJunkFile(f));
-  const skipped = allFiles.filter(isJunkFile);
-  if (skipped.length) console.log(`  Skipping: ${skipped.join(", ")}`);
+  for (const vl2 of vl2Files) {
+    console.log(`Processing: ${vl2}`);
+    let otherFolder = null;
+    const tmpDir = fs.mkdtempSync(path.join("/tmp", "vl2-"));
 
-  // Group player skins by their name prefix.
-  const skinGroups = new Map(); // skinName -> [{ basename, suffix }]
-  const otherFiles = [];
-
-  for (const basename of files) {
-    const match = basename.match(PLAYER_PATTERN);
-    if (match) {
-      const skinName = match[1];
-      const suffix = basename.slice(skinName.length); // e.g. ".lmale.png"
-      if (!skinGroups.has(skinName)) skinGroups.set(skinName, []);
-      skinGroups.get(skinName).push({ basename, suffix });
-    } else {
-      otherFiles.push(basename);
+    try {
+      extractVl2(vl2, tmpDir);
+    } catch {
+      console.warn(`  Warning: failed to extract ${vl2}, skipping`);
+      fs.rmSync(tmpDir, { recursive: true });
+      continue;
     }
-  }
 
-  // Process player skins grouped by skin name.
-  fs.mkdirSync(SKIN_DIR, { recursive: true });
-  for (const [skinName, group] of skinGroups) {
-    const suffixes = group.map((g) => g.suffix);
-    const finalName = overwrite
-      ? skinName
-      : await resolveSkinNameConflict(skinName, suffixes, SKIN_DIR);
-    for (const { basename, suffix } of group) {
-      const destName = `${finalName}${suffix}`;
+    const allFiles = fs.readdirSync(tmpDir).filter((f) =>
+      fs.statSync(path.join(tmpDir, f)).isFile()
+    );
+    const files = allFiles.filter((f) => !isJunkFile(f));
+    const skipped = allFiles.filter(isJunkFile);
+    if (skipped.length) console.log(`  Skipping: ${skipped.join(", ")}`);
+
+    // Group player skins by their name prefix.
+    const skinGroups = new Map(); // skinName -> [{ basename, suffix }]
+    const otherFiles = [];
+
+    for (const basename of files) {
+      const match = basename.match(PLAYER_PATTERN);
+      if (match) {
+        const skinName = match[1];
+        const suffix = basename.slice(skinName.length); // e.g. ".lmale.png"
+        if (!skinGroups.has(skinName)) skinGroups.set(skinName, []);
+        skinGroups.get(skinName).push({ basename, suffix });
+      } else {
+        otherFiles.push(basename);
+      }
+    }
+
+    // Process player skins grouped by skin name.
+    fs.mkdirSync(SKIN_DIR, { recursive: true });
+    for (const [skinName, group] of skinGroups) {
+      const suffixes = group.map((g) => g.suffix);
+      const finalName = overwrite
+        ? skinName
+        : await resolveSkinNameConflict(skinName, suffixes, SKIN_DIR);
+      for (const { basename, suffix } of group) {
+        const destName = `${finalName}${suffix}`;
+        const { destPath, replaced } = copyInto(
+          path.join(tmpDir, basename),
+          SKIN_DIR,
+          destName,
+          overwrite
+        );
+        let note = "";
+        if (finalName !== skinName) note = " (renamed)";
+        else if (replaced) note = " (replaced)";
+        console.log(`  ${basename} -> ${destPath}${note}`);
+        if (replaced) {
+          for (const galleryPath of removeGalleryScreenshots(destPath)) {
+            console.log(`    removed ${galleryPath}`);
+          }
+        }
+      }
+    }
+
+    // Process non-player files.
+    for (const basename of otherFiles) {
+      if (otherFolder === null) {
+        otherFolder = await prompt(
+          `  Non-player file found: ${basename}\n  Enter folder name under ${SKIN_DIR} for non-player files: `
+        );
+      }
+      const dest = path.join(SKIN_DIR, otherFolder);
+      fs.mkdirSync(dest, { recursive: true });
+      const finalName = overwrite
+        ? basename
+        : await resolveFileConflict(basename, dest);
       const { destPath, replaced } = copyInto(
         path.join(tmpDir, basename),
-        SKIN_DIR,
-        destName,
+        dest,
+        finalName,
         overwrite
       );
-      let note = "";
-      if (finalName !== skinName) note = " (renamed)";
-      else if (replaced) note = " (replaced)";
-      console.log(`  ${basename} -> ${destPath}${note}`);
+      console.log(`  ${basename} -> ${destPath}${replaced ? " (replaced)" : ""}`);
       if (replaced) {
         for (const galleryPath of removeGalleryScreenshots(destPath)) {
           console.log(`    removed ${galleryPath}`);
         }
       }
     }
+
+    fs.rmSync(tmpDir, { recursive: true });
   }
 
-  // Process non-player files.
-  for (const basename of otherFiles) {
-    if (otherFolder === null) {
-      otherFolder = await prompt(
-        `  Non-player file found: ${basename}\n  Enter folder name under ${SKIN_DIR} for non-player files: `
-      );
-    }
-    const dest = path.join(SKIN_DIR, otherFolder);
-    fs.mkdirSync(dest, { recursive: true });
-    const finalName = overwrite
-      ? basename
-      : await resolveFileConflict(basename, dest);
-    const { destPath, replaced } = copyInto(
-      path.join(tmpDir, basename),
-      dest,
-      finalName,
-      overwrite
-    );
-    console.log(`  ${basename} -> ${destPath}${replaced ? " (replaced)" : ""}`);
-    if (replaced) {
-      for (const galleryPath of removeGalleryScreenshots(destPath)) {
-        console.log(`    removed ${galleryPath}`);
-      }
-    }
-  }
-
-  fs.rmSync(tmpDir, { recursive: true });
+  console.log("Done.");
 }
 
-console.log("Done.");
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
+}

@@ -4,7 +4,19 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { PNG } from "pngjs";
-import { findModelSkins } from "./modelData.mjs";
+import {
+  allModels,
+  findModelSkins,
+  modelMaterials,
+  writeStandardResolutionCopies,
+} from "./modelData.mjs";
+
+test("every model with materials is listed, so its skins reach the manifest", () => {
+  const unlisted = Object.keys(modelMaterials).filter(
+    (model) => !allModels.includes(model),
+  );
+  assert.deepEqual(unlisted, []);
+});
 
 test("shared discovery excludes incomplete and unnamed skins, retaining them for diagnostics", async () => {
   const cwd = process.cwd();
@@ -69,7 +81,43 @@ test("discovery refuses a missing, invalid or empty skin directory", async () =>
   }
 });
 
-test("uppercase PNG extensions are discovered and resized without overwriting originals", async () => {
+test("a tank skin includes its turret when it has one, and the turret is not a model of its own", async () => {
+  const cwd = process.cwd();
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "t2-skin-discovery-"));
+  const png = PNG.sync.write(new PNG({ width: 1, height: 1 }));
+  try {
+    const tank = [
+      "Vehicle_grav_tank_bodyMain.png",
+      "vehicle_grav_tank_bodyside1.png",
+      "vehicle_grav_tank_bodyside2.png",
+    ];
+    const fixtures = [
+      ...tank.map((file) => `Turreted/${file}`),
+      "Turreted/turret_assaultTank.png",
+      ...tank.map((file) => `Plain/${file}`),
+    ];
+    for (const file of fixtures) {
+      const destination = path.join(dir, "docs/skins", file);
+      await fs.mkdir(path.dirname(destination), { recursive: true });
+      await fs.writeFile(destination, png);
+    }
+    process.chdir(dir);
+
+    const models = await findModelSkins();
+    const tanks = models.get("vehicle_grav_tank");
+    assert.deepEqual([...tanks.keys()].sort(), ["Plain", "Turreted"]);
+    assert.deepEqual(tanks.get("Turreted").files.get("turret_assaultTank"), [
+      "./docs/skins/Turreted/turret_assaultTank.png",
+    ]);
+    assert.equal(tanks.get("Plain").files.has("turret_assaultTank"), false);
+    assert.equal(models.has("turret_assaulttank_mortar"), false);
+  } finally {
+    process.chdir(cwd);
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("discovery only reads; HD textures get @1x copies without overwriting originals", async () => {
   const cwd = process.cwd();
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "t2-skin-discovery-"));
   const original = PNG.sync.write(new PNG({ width: 1024, height: 1024 }));
@@ -79,6 +127,9 @@ test("uppercase PNG extensions are discovered and resized without overwriting or
     await fs.writeFile("docs/skins/Upper.lmale.PNG", original);
     await fs.writeFile("docs/skins/Mixed.lmale.PnG", original);
     const models = await findModelSkins();
+    const originals = ["Mixed.lmale.PnG", "Upper.lmale.PNG"];
+    assert.deepEqual((await fs.readdir("docs/skins")).sort(), originals);
+    assert.deepEqual(writeStandardResolutionCopies(models).sort(), originals);
     for (const [name, extension] of [
       ["Upper", "PNG"],
       ["Mixed", "PnG"],

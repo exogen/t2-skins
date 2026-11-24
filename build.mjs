@@ -2,7 +2,11 @@ import fs from "fs";
 import path from "path";
 import orderBy from "lodash.orderby";
 import { parseArgs } from "util";
-import { allModels, findModelSkins } from "./modelData.mjs";
+import {
+  allModels,
+  findModelSkins,
+  writeStandardResolutionCopies,
+} from "./modelData.mjs";
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -76,6 +80,9 @@ async function getSkinManifest({
     }
     process.exit(0);
   }
+
+  // The manifest's sizeMultiplier tells clients to use these @1x copies.
+  writeStandardResolutionCopies(foundModels);
 
   const oldPacks = previousManifest.packs ?? {};
   const newPacks = {};

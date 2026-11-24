@@ -6,6 +6,7 @@ import probe from "probe-image-size";
 import { resizePng } from "./resize.mjs";
 
 const defaultTextureSize = [512, 512];
+const SKIN_DIR = "./docs/skins";
 
 export const playerModels = [
   "lmale",
@@ -32,12 +33,12 @@ export const weaponModels = [
   "shocklance",
   "sniper",
   "targeting",
+  "mine",
 ];
 
 export const vehicleModels = [
   "vehicle_grav_scout",
   "vehicle_grav_tank",
-  "turret_assaulttank_mortar",
   "vehicle_land_mpbbase",
   "vehicle_air_scout",
   "vehicle_air_bomber",
@@ -206,11 +207,6 @@ export const modelMaterials = {
     {
       label: "Weapon",
       name: "weapon_elf",
-      file: "weapon_elf",
-    },
-    {
-      label: "Glow",
-      name: "weapon_elf0",
       file: "weapon_elf",
     },
   ],
@@ -426,12 +422,14 @@ export const modelMaterials = {
       name: "vehicle_grav_tank_bodyside1",
       selectable: false,
     },
-  ],
-  turret_assaulttank_mortar: [
+    // As in the skinner, the turret mounted on the tank is part of its skin.
+    // Tank skins made before the turret was shown don't have it.
     {
       label: "Turret",
       name: "turret_assaulttank_mortar",
       file: "turret_assaultTank",
+      mount: "turret_assaulttank_mortar",
+      optional: true,
     },
   ],
   vehicle_land_mpbbase: [
@@ -547,13 +545,20 @@ export function fileToModels(path, skinName = null) {
   return null;
 }
 
+/** The skin a file belongs to by its folder under `skinDir`, or null for a
+ * file at the top level, whose own name carries its skin. */
+export function skinFolderName(filePath, skinDir = SKIN_DIR) {
+  const parts = path.relative(skinDir, filePath).split(path.sep);
+  return parts.length > 1 ? parts[0] : null;
+}
+
 // Both the manifest and gallery use this catalog. Incomplete skins are only
-// included when requested for diagnostics.
+// included when requested for diagnostics. It only reads the skin files.
 export async function findModelSkins({
   readModificationDate = false,
   includeIncomplete = false,
 } = {}) {
-  const skinDir = "./docs/skins";
+  const skinDir = SKIN_DIR;
   if (!fs.statSync(skinDir).isDirectory()) {
     throw new Error(`Expected a directory at ${skinDir}`);
   }
@@ -565,10 +570,7 @@ export async function findModelSkins({
   }
   const foundModels = fileArrayToModels(
     skinPaths,
-    (filePath) => {
-      const parts = path.relative(skinDir, filePath).split(path.sep);
-      return parts.length > 1 ? parts[0] : null;
-    },
+    (filePath) => skinFolderName(filePath, skinDir),
     { readModificationDate },
   );
   if (!includeIncomplete) {
@@ -603,11 +605,11 @@ export function fileArrayToModels(
           dateFirstSeen: null,
           files: new Map(),
           sizeMultiplier: new Map(),
+          // Each HD texture's standard size, for its @1x copy.
+          standardSizes: new Map(),
         };
 
-        const inBuffer = fs.readFileSync(fullPath);
-
-        const sizeInfo = probe.sync(inBuffer);
+        const sizeInfo = probe.sync(fs.readFileSync(fullPath));
         const key = model.material.file ?? model.material.name;
         const baseSize = model.material.size ?? defaultTextureSize;
         const sizeMultiplier = Math.max(
@@ -615,22 +617,9 @@ export function fileArrayToModels(
           sizeInfo.height / baseSize[1]
         );
         if (sizeMultiplier > 1) {
-          skinMaterials.sizeMultiplier.set(
-            path.relative("docs/skins", fullPath),
-            sizeMultiplier
-          );
-          const outPath = fullPath.replace(/\.png$/i, "@1x.png");
-          console.log(
-            `Resizing: ${path.relative(
-              "docs/skins",
-              fullPath
-            )} -> ${path.relative("docs/skins", outPath)}`
-          );
-          const outBuffer = resizePng(inBuffer, {
-            width: baseSize[0],
-            height: baseSize[1],
-          });
-          fs.writeFileSync(outPath, outBuffer);
+          const relativePath = path.relative("docs/skins", fullPath);
+          skinMaterials.sizeMultiplier.set(relativePath, sizeMultiplier);
+          skinMaterials.standardSizes.set(relativePath, baseSize);
         }
 
         if (readModificationDate) {
@@ -664,6 +653,32 @@ export function fileArrayToModels(
     });
   });
   return foundModels;
+}
+
+/** Writes a standard-resolution `@1x` copy beside each HD texture of the
+ * skins in `foundModels`, and returns the HD textures' paths under `skinDir`.
+ * A texture shared by several models is written once. */
+export function writeStandardResolutionCopies(foundModels, skinDir = SKIN_DIR) {
+  const sizes = new Map();
+  for (const skinsByName of foundModels.values()) {
+    for (const skin of skinsByName.values()) {
+      for (const [relativePath, size] of skin.standardSizes) {
+        sizes.set(relativePath, size);
+      }
+    }
+  }
+  for (const [relativePath, [width, height]] of sizes) {
+    const source = path.join(skinDir, relativePath);
+    const output = source.replace(/\.png$/i, "@1x.png");
+    console.log(
+      `Resizing: ${relativePath} -> ${path.relative(skinDir, output)}`
+    );
+    fs.writeFileSync(
+      output,
+      resizePng(fs.readFileSync(source), { width, height })
+    );
+  }
+  return [...sizes.keys()];
 }
 
 function getFileFirstAddedDate(dirPath) {
